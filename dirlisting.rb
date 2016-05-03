@@ -108,7 +108,12 @@ begin
 	Dir.glob("**/*").each_with_index do |fn,i|
 	  if not File.directory?(fn)
 
-		ap = File.realpath(fn)
+		begin
+			ap = File.realpath(fn)
+		rescue => e
+			log.log_skipped(fn, "File.realpath fails, probably broken link")
+			next
+		end
 		if not File.readable?(ap) 
 			log.log_skipped(ap, "not readable")
 			next
