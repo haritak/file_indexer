@@ -2,108 +2,27 @@
 
 require 'mysql'
 require 'time'
+require 'digest'
 load '/home/yannos/scripts/credentials.txt'
-
-class Logger
-	def initialize
-		@log = File.new("/home/yannos/dirlisting.errors.log", "a")
-		@log.puts("--- new run ---")
-	end
-
-	def log_skipped(f, r)
-		@log.puts("")
-		@log.puts("The following file was skipped")
-		@log.puts(f)
-		@log.puts(r)
-		@log.puts("")
-	end
-	
-	def close
-		@log.close if @log
-	end
-end
-
-class Recorder
-	def initialize
-		@con = Mysql.new 'localhost', MY_USERNAME, MY_PASSWORD, 'yannos'
-		rs = @con.query("SELECT * FROM files") #testing connection
-	end
-
-	def close
-		@con.close if @con
-	end
-
-	def insertToDb(sha, fn, sz, md)
-		isImg = image?(fn)
-		@con.query ("INSERT INTO \
-			files(sha256,fullpath,size,image,moddate) VALUES \
-			 (\"#{sha}\", \"#{fn}\", #{sz}, #{isImg}, #{md});")
-	end
-	def insertAsDuplicate(sha, fn)
-		@con.query ("INSERT INTO \
-			duplicate_files(sha256,fullpath) VALUES \
-			 (\"#{sha}\", \"#{fn}\");")
-	end
-
-	def exists_sha?(sha)
-		rs = @con.query ("SELECT * FROM files WHERE sha256=\"#{sha}\";")
-		rs.num_rows >= 1
-	end
-
-	def exists_file?(an)
-		#binary makes sure the comparison is case sensitive. 
-		#By default comparison is case insesitive. 
-		#Moreover, I couldn't find utf8 collation with case sensitivity
-		rs = @con.query ("SELECT * FROM files WHERE binary fullpath=\"#{an}\";")
-		rs.num_rows >= 1
-	end
-
-	def getFullpath(sha)
-		rs = @con.query ("SELECT fullpath FROM files WHERE sha256=\"#{sha}\";")
-		rs.fetch_row[0]
-	end
-
-	def getSize(an)
-		rs = @con.query ("SELECT size FROM files WHERE binary fullpath=\"#{an}\";")
-		rs.fetch_row[0]
-	end
-
-	def getModTime(an)
-		rs = @con.query ("SELECT moddate FROM files WHERE binary fullpath=\"#{an}\";")
-		rs.fetch_row[0]
-	end
-
-	def updateFile(ap, sha, sz, mt)
-		@con.query ("UPDATE files SET \
-                             sha256=\"#{sha}\", \
-                             size=#{sz}, \
-                             moddate=#{mt} \
-                             WHERE binary fullpath=\"#{ap}\";");
-	end
-
-
-private
-
-	def image?(fn)
-	   ext = File.extname(fn).downcase;
-	   ext==".jpg" or ext == ".jpeg" or ext == ".gif" or ext == ".cr2"
-	end
-
-end
-
-
+load '/home/yannos/scripts/file_indexer/logger.rb'
+load '/home/yannos/scripts/file_indexer/db.rb'
 
 def calcSha(ap)
-	cmd = "sha256sum \"#{ap}\""
-	s = `#{cmd}`
-	s.length<64 ? nil : s[0..63]
+	s = Digest::SHA256.file ap
 end
 
 
 begin
 	
+	puts "Initializing"
 	log = Logger.new
 	recorder = Recorder.new
+	puts "Initialized"
+
+	#recorder.checkFilenames
+	#exit
+
+	@start = Time.now
 
 	Dir.glob("**/*").each_with_index do |fn,i|
 	  if not File.directory?(fn)
@@ -119,12 +38,14 @@ begin
 			next
 		end
 
-	        puts "----Processing file number #{i}----"
+	        puts "----Processing file number #{i} ----"
+		p ap
+		puts ap
 
 		sz = File.size(ap);
 		mt = File.mtime(ap).to_f;
 
-	        puts "#{sz}", "#{mt}", "#{ap}"
+	        puts "#{sz}", "#{mt}"
 
 		if recorder.exists_file?(ap)  
 			p_sz = recorder.getSize(ap).to_i
@@ -137,21 +58,11 @@ begin
 				puts "same size, same mod time, skipped"
 			else
 				sha = calcSha(ap)
-				if not sha
-					log.log_skipped(ap, "bad checksum")
-					puts "bad ckecksum #{sha}"
-				else
-					puts "Record updated due to file contents change"
-					recorder.updateFile(ap, sha, sz, mt)
-				end
+				puts "Record updated due to file contents change"
+				recorder.updateFile(ap, sha, sz, mt)
 			end
 		else
 			sha=calcSha(ap) 
-			if not sha
-				log.log_skipped(ap, "bad checksum")
-				puts "bad ckecksum #{sha}"
-				next
-			end
 
 			if recorder.exists_sha?(sha) 
 				previous_ap = recorder.getFullpath(sha);
@@ -185,4 +96,7 @@ rescue Mysql::Error => e
 ensure
 	recorder.close if recorder
 	log.close if log
+
+	elapsed = Time.now - @start
+	puts "Elapsed time #{elapsed} seconds #{elapsed} #{elapsed}"
 end
