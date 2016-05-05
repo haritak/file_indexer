@@ -3,6 +3,7 @@
 require 'mysql'
 require 'time'
 require 'digest'
+require 'thread'
 load '/home/yannos/scripts/credentials.txt'
 load '/home/yannos/scripts/file_indexer/logger.rb'
 load '/home/yannos/scripts/file_indexer/db.rb'
@@ -14,7 +15,14 @@ end
 $MAX_NO_THREADS = 50
 $MIN_NO_THREADS = 25
 
+semaphore = Mutex.new
+
 begin
+	  puts "Initializing"
+	  log = Logger.new
+	  recorder = Recorder.new
+	  puts "Initialized"
+
 	@start = Time.now
 	@counter = 0
 
@@ -37,65 +45,93 @@ begin
 	  end
 
 	  Thread.new do
-		  puts "Initializing"
-		  log = Logger.new
-		  recorder = Recorder.new
-		  puts "Initialized"
-
- 		  local_fn = fn
+		  semaphore.synchronize {
+			  local_fn = fn
+		  }
 		  if not File.directory?(local_fn)
 
 			begin
 				ap = File.realpath(local_fn)
 			rescue => e
-				log.log_skipped(local_fn, "File.realpath fails, probably broken link")
+				semaphore.synchronize {
+					log.log_skipped(local_fn, "File.realpath fails, probably broken link")
+				}
 				Thread.exit
 			end
 			if not File.readable?(ap) 
-				log.log_skipped(ap, "not readable")
+				semaphore.synchronize {
+					log.log_skipped(ap, "not readable")
+				}
 				Thread.exit
 			end
 
-			puts "----Processing file number #{i} ----"
-			p ap
-			puts ap
+			myThreadId = Thread.current.object_id
+			semaphore.synchronize {
+				puts "----Thread number #{myThreadId} is processing file number #{i} ----"
+				p ap
+				puts ap
+			}
 
 			sz = File.size(ap);
 			mt = File.mtime(ap).to_f;
 
 			puts "#{sz}", "#{mt}"
 
-			if recorder.exists_file?(ap)  
-				p_sz = recorder.getSize(ap).to_i
-				p_mt = recorder.getModTime(ap).to_f
+			file_exists = false;
+			semaphore.synchronize {
+				file_exists = recorder.exists_file?(ap)
+			}
+			if file_exists
+				p_sz = 0
+				p_mt = 0
+				semaphore.synchronize {
+					p_sz = recorder.getSize(ap).to_i
+					p_mt = recorder.getModTime(ap).to_f
+					puts "#{myThreadId}: File was found with size #{p_sz} and modification time #{p_mt}"
+				}
 				
-				puts "File was found with size #{p_sz} and modification time #{p_mt}"
 				
 				if p_sz == sz && p_mt == mt
-					log.log_skipped(ap, "same size, same mt already recorded")
-					puts "same size, same mod time, skipped"
+					semaphore.synchronize{
+						log.log_skipped(ap, "same size, same mt already recorded")
+						puts "#{myThreadId}: same size, same mod time, skipped"
+					}
 				else
 					sha = calcSha(ap)
-					puts "Record updated due to file contents change"
-					recorder.updateFile(ap, sha, sz, mt)
+					semaphore.synchronize {
+						puts "#{myThreadId}: Record updated due to file contents change"
+						recorder.updateFile(ap, sha, sz, mt)
+					}
 				end
 			else
 				sha=calcSha(ap) 
 
-				if recorder.exists_sha?(sha) 
-					previous_ap = recorder.getFullpath(sha);
+				sha_exists = false
+				semaphore.synchronize {
+					sha_exists = recorder.exists_sha?(sha)
+				}
+				if sha_exists
+					semaphore.synchronize {
+						previous_ap = recorder.getFullpath(sha);
+					}
 
 					if File.identical?(ap, previous_ap)
-						log.log_skipped(ap, "Identical as #{previous_ap}")
-						puts "Is identical to #{previous_ap}"
+						semaphore.synchronize{
+							log.log_skipped(ap, "Identical as #{previous_ap}")
+							puts "Is identical to #{previous_ap}"
+						}
 				
 					else
-						puts "Recorded as duplicate to #{previous_ap}"
-						recorder.insertAsDuplicate(sha, ap)
+						semaphore.synchronize{
+							puts "Recorded as duplicate to #{previous_ap}"
+							recorder.insertAsDuplicate(sha, ap)
+						}
 					end
 				else
-					puts "Recorded as brand new"
-					recorder.insertToDb(sha, ap, sz, mt) 
+					semaphore.synchronize{
+						puts "Recorded as brand new"
+						recorder.insertToDb(sha, ap, sz, mt) 
+					}
 				end
 			end
 		end

@@ -3,6 +3,7 @@
 require 'mysql'
 require 'time'
 require 'shellwords'
+require 'thread'
 load '/home/yannos/scripts/credentials.txt'
 
 class Duplicates
@@ -10,7 +11,7 @@ class Duplicates
 
 	def initialize
 		@con = Mysql.new 'localhost', MY_USERNAME, MY_PASSWORD, 'yannos'
-		@rs = @con.query("SELECT * FROM duplicate_files") #testing connection
+		@rs = @con.query("SELECT sha256,fullpath FROM duplicate_files")
 		puts @rs.num_rows
 	end
 
@@ -63,39 +64,61 @@ begin
 
 	@start = Time.now
 
+	semaphore = Mutex.new
+
 	dups.each do |row|
-		sha = row[0]
-		ap =  row[1]
-		o_ap = dups.find_original(sha)
 
+		sleep 10 while Thread.list.count > 50
 
-		if ap=o_ap or File.identical?(ap, o_ap) 
-			next
-		else 
-			p ap
-			p o_ap
-			puts "The above files are different with the same sha."
-			if (File.size(ap) != File.size(o_ap)) 
-				raise "Files with the same sha, but different size!"
-			end
-			
-			if File.writable?(ap)
-				log.log("Unlinking file")
-				log.log("#{ap}");
-				log.log("Linking previous file to ");
-				log.log("#{o_ap}");
+		Thread.new do
+		begin
+			sha = ap = o_ap = ''
+			semaphore.synchronize {
+				sha = row[0]
+				ap =  row[1]
+				o_ap = dups.find_original(sha)
+			}
 
-				File.unlink(ap)
-				File.link(o_ap, ap)
-				@counter+=1
+			if ap==o_ap
+				print "="
+				Thread.exit
+			elseif File.identical?(ap, o_ap) 
+				print "."
+				Thread.exit
+			else 
 
-				log.log("done")
-			else
-				failed.log("Not writable : #{ap}")
+				#new_sha = calcSha( ap )
+				if (new_sha!= sha )
+					 raise "Shas missmatch!"
+				end
+				#new_sha = calcSha( o_ap )
+				if (new_sha!= sha )
+					 raise "Shas missmatch 2!"
+				end
+				if (File.size(ap) != File.size(o_ap)) 
+					raise "Files with the same sha, but different size!"
+				end
+				
+				if File.writable?(ap)
+					semaphore.synchronize {
+						log.log("Unlinking #{ap}, Linking with #{o_ap}")
+						@counter+=1
+					}
+					#File.unlink(ap)
+					#File.link(o_ap, ap)
+					print "+"
+				else
+					puts ap
+					exit
+					print "!"
+					semaphore.synchronize {
+						failed.log("Not writable : #{ap}")
+					}
+				end
 			end
 		end
-			
-		
+
+		end #thread
 	end
 
 rescue Mysql::Error => e
