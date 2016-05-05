@@ -11,17 +11,14 @@ def calcSha(ap)
 	s = Digest::SHA256.file ap
 end
 
+$MAX_NO_THREADS = 50
+$MIN_NO_THREADS = 25
 
 begin
-	
-	puts "Initializing"
-	log = Logger.new
-	recorder = Recorder.new
-	puts "Initialized"
-
 	@start = Time.now
 	@counter = 0
 
+	puts "Getting directory listing..."
 
 	Dir.glob("**/*").each_with_index do |fn,i|
 	  @counter+=1
@@ -29,16 +26,22 @@ begin
 		puts "Started"
 	  end
 
-	  while Thread.list.count > 50 do
+	  while Thread.list.count > $MAX_NO_THREADS do
 		puts "waiting for some threads to finish"
-		while Thread.list.count > 25 do
+		while Thread.list.count > $MIN_NO_THREADS do
 			puts Thread.list.count
 			sleep 1
 			puts Thread.list.count
 			sleep 1
 		end
 	  end
+
 	  Thread.new do
+		  puts "Initializing"
+		  log = Logger.new
+		  recorder = Recorder.new
+		  puts "Initialized"
+
  		  local_fn = fn
 		  if not File.directory?(local_fn)
 
