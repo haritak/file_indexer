@@ -56,8 +56,9 @@ Dir.glob(baseDir).each_with_index do |fn,i|
 			local_fn = fn
 		}
 
+		Thread.exit unless File.exists?(local_fn)
+
 		apath = File.realpath(local_fn)
-		Thread.exit unless File.exists?(apath)
 		Thread.exit unless File.readable?(apath)
 		Thread.exit unless not File.directory?(apath)
 
