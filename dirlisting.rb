@@ -12,30 +12,43 @@ def calcSha(ap)
 	s = Digest::SHA256.file ap
 end
 
+def thread_says(id, msg)
+	puts "#{id}: #{msg}"
+end
+
 $MAX_NO_THREADS = 50
 $MIN_NO_THREADS = 25
+$MI = true #minimal input
 
 semaphore = Mutex.new
+Thread.abort_on_exception = true
 
 begin
-	  puts "Initializing"
-	  log = Logger.new
-	  recorder = Recorder.new
-	  puts "Initialized"
+	puts "Initializing"
+	log = Logger.new
+	recorder = Recorder.new
+	puts "Initialized"
 
 	@start = Time.now
-	@counter = 0
 
 	puts "Getting directory listing..."
 
 	Dir.glob("**/*").each_with_index do |fn,i|
-	  @counter+=1
-	  if @counter== 1 
-		puts "Started"
-	  end
+
+	  #this part is executing by a single thread only
+
+	  puts "Started" if (i==1) 
+
+	  local_fn = ''
+	  semaphore.synchronize {
+		  local_fn = fn
+	  }
+	
 
 	  while Thread.list.count > $MAX_NO_THREADS do
-		puts "waiting for some threads to finish"
+		puts "While working for file #{i}, I am waiting for some threads to finish"
+		STDOUT.flush
+		STDERR.flush
 		while Thread.list.count > $MIN_NO_THREADS do
 			puts Thread.list.count
 			sleep 1
@@ -45,9 +58,6 @@ begin
 	  end
 
 	  Thread.new do
-		  semaphore.synchronize {
-			  local_fn = fn
-		  }
 		  if not File.directory?(local_fn)
 
 			begin
@@ -65,17 +75,16 @@ begin
 				Thread.exit
 			end
 
-			myThreadId = Thread.current.object_id
+			mid = Thread.current.object_id
 			semaphore.synchronize {
-				puts "----Thread number #{myThreadId} is processing file number #{i} ----"
-				p ap
-				puts ap
+				thread_says mid, "----processing file number #{i} ----" unless $mi
+				thread_says mid, ap unless $mi
 			}
 
 			sz = File.size(ap);
 			mt = File.mtime(ap).to_f;
 
-			puts "#{sz}", "#{mt}"
+			thread_says mid, "#{sz} #{mt}" unless $mi
 
 			file_exists = false;
 			semaphore.synchronize {
@@ -87,19 +96,19 @@ begin
 				semaphore.synchronize {
 					p_sz = recorder.getSize(ap).to_i
 					p_mt = recorder.getModTime(ap).to_f
-					puts "#{myThreadId}: File was found with size #{p_sz} and modification time #{p_mt}"
+					thread_says mid, "File was found with size #{p_sz} and modification time #{p_mt}" unless $mi
 				}
 				
 				
 				if p_sz == sz && p_mt == mt
 					semaphore.synchronize{
 						log.log_skipped(ap, "same size, same mt already recorded")
-						puts "#{myThreadId}: same size, same mod time, skipped"
+						thread_says mid, "same size, same mod time, skipped"
 					}
 				else
 					sha = calcSha(ap)
 					semaphore.synchronize {
-						puts "#{myThreadId}: Record updated due to file contents change"
+						thread_says mid, "Record updated due to file contents change"
 						recorder.updateFile(ap, sha, sz, mt)
 					}
 				end
@@ -111,6 +120,7 @@ begin
 					sha_exists = recorder.exists_sha?(sha)
 				}
 				if sha_exists
+					previous_ap=''
 					semaphore.synchronize {
 						previous_ap = recorder.getFullpath(sha);
 					}
@@ -118,30 +128,30 @@ begin
 					if File.identical?(ap, previous_ap)
 						semaphore.synchronize{
 							log.log_skipped(ap, "Identical as #{previous_ap}")
-							puts "Is identical to #{previous_ap}"
+							thread_says mid, "Is identical(same inode) to #{previous_ap}"
 						}
 				
 					else
 						semaphore.synchronize{
-							puts "Recorded as duplicate to #{previous_ap}"
+							thread_says mid, "Recorded as duplicate to #{previous_ap}"
 							recorder.insertAsDuplicate(sha, ap)
 						}
 					end
 				else
 					semaphore.synchronize{
-						puts "Recorded as brand new"
+						thread_says mid, "Recorded as brand new"
 						recorder.insertToDb(sha, ap, sz, mt) 
 					}
 				end
 			end
 		end
 
-		puts ""
 		Thread.exit
 	  end
 
 	end
 
+	sleep 10
 	puts("--- done ! ---")
 
 rescue Mysql::Error => e

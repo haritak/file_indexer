@@ -85,13 +85,15 @@ begin
 			elseif File.identical?(ap, o_ap) 
 				print "."
 				Thread.exit
+			elseif  not File.exists?(ap) or not File.exists?(o_ap)
+				print "x"
+				Thread.exit 
 			else 
-
-				#new_sha = calcSha( ap )
+				new_sha = calcSha( ap )
 				if (new_sha!= sha )
 					 raise "Shas missmatch!"
 				end
-				#new_sha = calcSha( o_ap )
+				new_sha = calcSha( o_ap )
 				if (new_sha!= sha )
 					 raise "Shas missmatch 2!"
 				end
