@@ -1,3 +1,4 @@
+#!/usr/bin/ruby
 #require 'rubygems'
 require 'mysql'
 require 'sequel'
@@ -45,9 +46,13 @@ L.info("Searching for files")
 Dir.glob(baseDir).each_with_index do |fn,i|
 	L.info ("Search finished") if i==1
 
-	while Thread.list.count>10 
-		sleep 1 while Thread.list.count > 4
-		puts Thread.list.count
+        sd=0.01
+	while Thread.list.count>20 
+		while Thread.list.count > 10
+			sleep sd 
+			sd = 2*sd
+			puts Thread.list.count
+		end
 	end
 
 	Thread.new do 
