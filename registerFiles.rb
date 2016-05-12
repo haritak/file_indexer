@@ -12,27 +12,6 @@ Thread::abort_on_exception=true
 DB = Sequel.connect("mysql://#{MY_USERNAME}:#{MY_PASSWORD}@localhost/yannos")
 L = Logger.new($stdout)
 
-#DB.loggers << L
-#DB.drop_table?(:_duplicates)
-#DB.drop_table?(:_files)
-
-DB.create_table?(:_files) do
-	String :sha, :fixed=>true, :size=>64, :index=>true, :primary_key=>true
-	String :apath, :text=>true, :size=>5000
-	Bignum :bytes
-	Float :seconds
-end
-
-DB.create_table?(:_duplicates) do
-	String :sha, :fixed=>true, :size=>64, :index=>true
-	String :apath, :text=>5000, :fixed=>true
-	Bignum :bytes
-	Bignum :seconds
-	foreign_key [:sha], :_files
-end
-
-
-
 S = Mutex.new
 
 _Files = DB[:_files]
@@ -47,8 +26,8 @@ Dir.glob(baseDir).each_with_index do |fn,i|
 	L.info ("Search finished") if i==1
 
         sd=0.01
-	while Thread.list.count>20 
-		while Thread.list.count > 10
+	while Thread.list.count>10 
+		while Thread.list.count > 5
 			sleep sd 
 			sd = 2*sd
 			puts Thread.list.count
