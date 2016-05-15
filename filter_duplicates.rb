@@ -20,13 +20,31 @@ DB.logger = Ldb
 _Files = DB[:_files]
 _Dups = DB[:_duplicates]
 
+def unlinkFiles(myap, oap, mysz)
+	@bytes += mysz
+	if not File.writable?(myap)
+		Ler.warn ("File not writable #{myap}")
+		return false
+	end
+
+	Lunlinked.info("Unlinking #{myap}")
+	File.unlink(myap)
+	File.link(oap, myap)
+	Lunlinked.info ("Linked to #{oap}")
+	return true
+end
+
 @counter = 0;
+@bytes = 0;
 @start = Time.now
 semaphore = Mutex.new
 _Dups.select(:sha, :apath, :bytes, :seconds).all do |row|
 
 
 	@counter += 1
+	if @counter == 3000 
+		break
+	end
 
 	puts
 	puts "--- #{@counter} ---"
@@ -87,19 +105,45 @@ _Dups.select(:sha, :apath, :bytes, :seconds).all do |row|
 
 	if osz == mysz && omt == mymt &&
 		File.size(myap) == mysz && File.mtime(myap).to_f == mymt	
-
-		Lunlinked.info("Unlinking #{myap}")
-		File.unlink(myap)
-		File.link(oap, myap)
-		Lunlinked.info ("Linked to #{oap}")
+		
+		if not unlinkFiles(myap, oap, mysz) 
+			next
+		end
 	else
-		Lerr.warn ("Files differ:")
-		Lunlinked.info ("My file #{myap}")
-		Lunlinked.info ("Original #{oap}")
-		Lerr.warn ("Original file attributes are #{osz}, #{omt}")
-		Lerr.warn ("My file attributes are #{mysz}, #{mymt}")
+		puts "Recalculating hashes"
+		myNewSha = ''
+		oNewSha = ''
+		t1 = Thread.new do
+			myNewSha = Digest::SHA256.file(myap)
+		end
+		t2 = Thread.new do 
+			oNewSha = Digest::SHA256.file(oap)
+		end
+
+		puts "Waiting for thread 1 to finish calculating its hash"
+		t1.join
+		puts "Waiting for thread 2 to finish calculating its hash"
+		t2.join
+
+		if myNewSha && oNewSha && myNewSha==oNewSha
+			unlinkFiles(myap, oap, mysz)
+		else
+			Ler.warn ("Files differ:")
+			Ler.warn ("My file #{myap}")
+			Ler.warn ("My sha #{myNewSha}")
+			Ler.warn ("Original #{oap}")
+			Ler.warn ("Original sha #{oNewSha}")
+			Ler.warn ("Original file attributes are #{osz}, #{omt}")
+			Ler.warn ("My file attributes are #{mysz}, #{mymt}")
+		end
 	end
 
 end #iteration over all rows
 
+unit = ['b', 'K', 'M', 'G'].reverse
+4.times do
+	print @bytes
+	puts unit.pop
+	@bytes = @bytes/1000
+end
 
