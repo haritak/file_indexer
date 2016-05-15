@@ -42,9 +42,6 @@ _Dups.select(:sha, :apath, :bytes, :seconds).all do |row|
 
 
 	@counter += 1
-	if @counter == 3000 
-		break
-	end
 
 	puts
 	puts "--- #{@counter} ---"
