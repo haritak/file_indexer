@@ -1,13 +1,12 @@
 #!/usr/bin/ruby
-#require 'rubygems'
 require 'mysql'
 require 'sequel'
 require 'logger'
-require 'thread'
-require 'digest'
 load '/home/yannos/scripts/credentials.txt'
 
-Thread::abort_on_exception=true
+puts "Database will be wiped out in 5 seconds"
+
+sleep 6
 
 DB = Sequel.connect("mysql://#{MY_USERNAME}:#{MY_PASSWORD}@localhost/yannos")
 L = Logger.new($stdout)
