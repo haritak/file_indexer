@@ -5,7 +5,7 @@ require 'sequel'
 require 'logger'
 require 'thread'
 require 'digest'
-load '/home/yannos/scripts/credentials.txt'
+load 'credentials.txt'
 
 Thread::abort_on_exception=true
 
