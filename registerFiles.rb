@@ -9,7 +9,7 @@ load '/home/yannos/scripts/credentials.txt'
 
 Thread::abort_on_exception=true
 
-DB = Sequel.connect("mysql://#{MY_USERNAME}:#{MY_PASSWORD}@localhost/yannos")
+DB = Sequel.connect("mysql://#{MY_USERNAME}:#{MY_PASSWORD}@localhost/#{DB_NAME}")
 L = Logger.new($stdout)
 
 S = Mutex.new
