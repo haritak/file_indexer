@@ -21,6 +21,8 @@ baseDir = "."
 baseDir = ARGV[0] if ARGV.size >= 1
 baseDir = File.join(baseDir, "**/*")
 
+puts "There are currently #{_Files.count} files recorded as single"
+
 L.info("Searching for files")
 Dir.glob(baseDir).each_with_index do |fn,i|
 	L.info ("Search finished") if i==1
