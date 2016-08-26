@@ -38,3 +38,5 @@ build/
 
 #vim swap files
 .*swp
+
+credentials.txt
