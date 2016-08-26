@@ -2,13 +2,13 @@
 require 'mysql'
 require 'sequel'
 require 'logger'
-load '/home/yannos/scripts/credentials.txt'
+load 'credentials.txt'
 
 puts "Database will be wiped out in 5 seconds"
 
 sleep 6
 
-DB = Sequel.connect("mysql://#{MY_USERNAME}:#{MY_PASSWORD}@localhost/yannos")
+DB = Sequel.connect("mysql://#{MY_USERNAME}:#{MY_PASSWORD}@localhost/#{DB_NAME}")
 L = Logger.new($stdout)
 
 DB.loggers << L
