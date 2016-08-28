@@ -53,6 +53,8 @@ Dir.glob(baseDir).each_with_index do |fn,i|
 		apath = File.realpath(local_fn)
 		if not File.readable?(apath)
 			LS.synchronize {
+				#TODO : Unreadable files never get here,
+				#most probably due to **/* operator
 				warnings.warn("not readable: #{apath}") 
 			}
 			Thread.exit 
