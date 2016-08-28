@@ -40,3 +40,5 @@ build/
 .*swp
 
 credentials.txt
+Warnings.txt
+Files_Not_Registered_In_Database.txt
